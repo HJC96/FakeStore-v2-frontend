@@ -13,43 +13,47 @@ React + TypeScript + Tailwind CSS를 활용하여 구현합니다.
 
 📁 디렉토리 구조
 ~~~plaintext
-fakestore-v2-frontend/
-├── src/                      # 소스 코드 메인 디렉토리
-│   ├── api/                  # API 통신 관련 모듈
-│   │   ├── axios.ts         # Axios 인스턴스 설정
-│   │   ├── carts.ts         # 장바구니 관련 API 함수
-│   │   └── products.ts      # 상품 관련 API 함수
-│   │
-│   ├── components/          # 재사용 가능한 UI 컴포넌트
-│   │   ├── CategoryFilter.tsx    # 카테고리 필터링 컴포넌트
-│   │   ├── Header.tsx           # 헤더 네비게이션 컴포넌트
-│   │   ├── LimitedProducts.tsx  # 제한된 상품 목록 컴포넌트
-│   │   └── ProductCard.tsx      # 상품 카드 컴포넌트
-│   │
-│   ├── contexts/           # React Context 관련
-│   │   └── CartContext.tsx # 장바구니 상태 관리 컨텍스트
-│   │
-│   ├── pages/             # 페이지 컴포넌트
-│   │   ├── AdminPage.tsx  # 관리자 페이지 (상품 관리)
-│   │   ├── CartPage.tsx   # 장바구니 페이지
-│   │   ├── Home.tsx       # 메인 페이지
-│   │   └── ProductDetail.tsx # 상품 상세 페이지
-│   │
-│   ├── types/             # TypeScript 타입 정의
-│   │   └── Product.ts     # 상품 관련 타입 정의
-│   │
-│   ├── App.tsx            # 메인 App 컴포넌트
-│   ├── index.tsx          # 앱 진입점
-│   ├── index.css          # 전역 스타일
-│   └── ...               # 기타 설정 파일들
+src/
+├── api/             # ✅ API 통신 로직 담당 폴더
+│   ├── axios.ts     # 공통 Axios 인스턴스 설정 (baseURL, 인터셉터 등)
+│   ├── products.ts  # /products 관련 API 함수 정의
+│   └── carts.ts     # /carts 관련 API 함수 정의
+│                   # 👉 각 리소스별로 API 함수들을 분리하여 관리
 │
-├── public/               # 정적 파일 디렉토리
-├── build/               # 빌드 결과물 디렉토리
-├── node_modules/        # npm 패키지 디렉토리
-├── package.json         # 프로젝트 설정 및 의존성 정보
-├── tsconfig.json        # TypeScript 컴파일러 설정
-├── tailwind.config.js   # Tailwind CSS 설정
-└── postcss.config.js    # PostCSS 설정
+├── components/      # ✅ 재사용 가능한 UI 컴포넌트 모음
+│   ├── ProductCard.tsx      # 상품 카드 UI 컴포넌트
+│   ├── CategoryFilter.tsx   # 카테고리 필터 버튼/드롭다운
+│   └── Header.tsx           # 공통 헤더 (로고, 장바구니 버튼 등)
+│                   # 👉 페이지가 아닌 "조각 UI"들을 여기에 배치
+│
+├── pages/           # ✅ 각 Route에 대응되는 페이지 컴포넌트
+│   ├── Home.tsx             # 홈 또는 상품 리스트 페이지
+│   ├── ProductDetail.tsx    # 상품 상세 페이지
+│   ├── CartPage.tsx         # 장바구니 페이지
+│   └── AdminPage.tsx        # (선택) 상품 CRUD 페이지
+│                   # 👉 react-router-dom으로 연결되는 실제 "화면 단위" 구성
+│
+├── hooks/           # ✅ 커스텀 훅 정의 폴더
+│   ├── useProducts.ts       # 상품 리스트 가져오는 커스텀 훅
+│   └── useCart.ts           # 장바구니 상태 관련 커스텀 훅
+│                   # 👉 상태, API 호출 등을 캡슐화해 재사용성 높임
+│
+├── types/           # ✅ TypeScript 인터페이스 정의 폴더
+│   ├── Product.ts           # Product 타입 정의
+│   ├── Cart.ts              # Cart 타입 정의
+│   └── ApiResponse.ts       # 공통 응답 형식 타입 등
+│                   # 👉 API 응답 형식을 기준으로 타입을 정의하여 사용
+│
+├── contexts/        # ✅ 전역 상태 관리 (React Context or Zustand 등)
+│   ├── CartContext.tsx      # 장바구니 전역 상태 관리
+│   └── UserContext.tsx      # 로그인 유저 정보 (필요시)
+│                   # 👉 Context API로 전역 데이터 공유 및 업데이트
+│
+├── App.tsx          # ✅ 라우터 설정 및 전체 App 레이아웃
+│                   # 👉 페이지 라우팅 및 공통 Layout 적용 위치
+│
+└── main.tsx         # ✅ 앱 진입점 (ReactDOM.render 또는 createRoot)
+                    # 👉 최상위 컴포넌트(App)를 DOM에 연결하는 역할
 ~~~
 
 # 1. 프로젝트 세팅
@@ -2268,5 +2272,163 @@ export function useCart() {
   }
   return context;
 }
+
+~~~
+## 5. 컴포넌트 구조 개선
+1. 컴포넌트 분리하여 재사용성 높이기
+* ProductImage: 상품 이미지 표시
+~~~tsx
+import { Product } from '../../types/Product';
+
+interface ProductImageProps {
+  product: Product;
+  className?: string;
+}
+
+export function ProductImage({ product, className = '' }: ProductImageProps) {
+  return (
+    <img
+      src={product.image}
+      alt={product.title}
+      className={`w-full h-40 object-contain ${className}`}
+      loading="lazy"
+    />
+  );
+} 
+
+// src/components/ProductCard.tsx
+import { Product } from '../types/Product';
+import { Link } from 'react-router-dom';
+import { ProductImage } from './product/ProductImage';
+import { ProductInfo } from './product/ProductInfo';
+import { AddToCartButton } from './product/AddToCartButton';
+import { useProductCard } from '../hooks/useProductCard';
+
+interface ProductCardProps {
+  product: Product;
+}
+
+function ProductCard({ product }: ProductCardProps) {
+  const { handleAddToCart } = useProductCard();
+
+  return (
+    <article className="border p-4 rounded shadow hover:shadow-lg">
+      <Link 
+        to={`/products/${product.id}`}
+        className="block"
+        aria-label={`${product.title} 상세 정보 보기`}
+      >
+        <ProductImage product={product} className="mb-2" />
+        <ProductInfo product={product} />
+      </Link>
+
+      <AddToCartButton 
+        product={product}
+        onAddToCart={handleAddToCart}
+      />
+    </article>
+  );
+}
+
+export default ProductCard;
+~~~
+
+* ProductInfo: 상품 제목과 가격 표시
+~~~tsx
+import { Product } from '../../types/Product';
+
+interface ProductInfoProps {
+  product: Product;
+  className?: string;
+}
+
+export function ProductInfo({ product, className = '' }: ProductInfoProps) {
+  return (
+    <div className={className}>
+      <h2 className="text-sm font-bold truncate" title={product.title}>
+        {product.title}
+      </h2>
+      <p className="text-blue-500 font-semibold">${product.price}</p>
+    </div>
+  );
+} 
+
+~~~
+* AddToCartButton: 장바구니 추가 버튼
+~~~tsx
+import { Product } from '../../types/Product';
+
+interface AddToCartButtonProps {
+  product: Product;
+  onAddToCart: (product: Product) => void;
+  className?: string;
+}
+
+export function AddToCartButton({ product, onAddToCart, className = '' }: AddToCartButtonProps) {
+  return (
+    <button
+      onClick={() => onAddToCart(product)}
+      className={`mt-2 px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 w-full text-sm ${className}`}
+      aria-label={`${product.title} 장바구니에 담기`}
+    >
+      장바구니 담기
+    </button>
+  );
+} 
+
+
+import { useCart } from '../contexts/CartContext';
+import { Product } from '../types/Product';
+
+export function useProductCard() {
+  const { addToCart } = useCart();
+
+  const handleAddToCart = (product: Product) => {
+    addToCart(product);
+  };
+
+  return {
+    handleAddToCart,
+  };
+} 
+~~~
+
+적용 파일
+~~~tsx
+// src/components/ProductCard.tsx
+import { Product } from '../types/Product';
+import { Link } from 'react-router-dom';
+import { ProductImage } from './product/ProductImage';
+import { ProductInfo } from './product/ProductInfo';
+import { AddToCartButton } from './product/AddToCartButton';
+import { useProductCard } from '../hooks/useProductCard';
+
+interface ProductCardProps {
+  product: Product;
+}
+
+function ProductCard({ product }: ProductCardProps) {
+  const { handleAddToCart } = useProductCard();
+
+  return (
+    <article className="border p-4 rounded shadow hover:shadow-lg">
+      <Link 
+        to={`/products/${product.id}`}
+        className="block"
+        aria-label={`${product.title} 상세 정보 보기`}
+      >
+        <ProductImage product={product} className="mb-2" />
+        <ProductInfo product={product} />
+      </Link>
+
+      <AddToCartButton 
+        product={product}
+        onAddToCart={handleAddToCart}
+      />
+    </article>
+  );
+}
+
+export default ProductCard;
 
 ~~~
