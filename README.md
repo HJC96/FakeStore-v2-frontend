@@ -1,7 +1,7 @@
 # README
 # 0. Fakestore 프론트엔드 개발
 
-이 프로젝트는 [Fake Store API](https://fakestoreapi.com/)를 기반으로 한 쇼핑몰 프론트엔드입니다.  
+이 프로젝트는 [Fake Store API](https://github.com/HJC96/FakeStore-v2)를 기반으로 한 쇼핑몰 프론트엔드입니다.  
 React + TypeScript + Tailwind CSS를 활용하여 구현합니다.
 
 ⚙️ 사용 기술 스택
