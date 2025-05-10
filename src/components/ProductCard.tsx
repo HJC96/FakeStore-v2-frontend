@@ -1,36 +1,34 @@
 // src/components/ProductCard.tsx
 import { Product } from '../types/Product';
 import { Link } from 'react-router-dom';
-import { useCart } from '../contexts/CartContext'; // 장바구니 훅 import
+import { ProductImage } from './product/ProductImage';
+import { ProductInfo } from './product/ProductInfo';
+import { AddToCartButton } from './product/AddToCartButton';
+import { useProductCard } from '../hooks/useProductCard';
 
 interface ProductCardProps {
   product: Product;
 }
 
 function ProductCard({ product }: ProductCardProps) {
-  const { addToCart } = useCart(); // 장바구니 추가 함수 사용
+  const { handleAddToCart } = useProductCard();
 
   return (
-    <div className="border p-4 rounded shadow hover:shadow-lg">
-      {/* 클릭 시 상세 페이지로 이동 */}
-      <Link to={`/products/${product.id}`}>
-        <img
-          src={product.image}
-          alt={product.title}
-          className="w-full h-40 object-contain mb-2"
-        />
-        <h2 className="text-sm font-bold truncate">{product.title}</h2>
-        <p className="text-blue-500 font-semibold">${product.price}</p>
+    <article className="border p-4 rounded shadow hover:shadow-lg">
+      <Link 
+        to={`/products/${product.id}`}
+        className="block"
+        aria-label={`${product.title} 상세 정보 보기`}
+      >
+        <ProductImage product={product} className="mb-2" />
+        <ProductInfo product={product} />
       </Link>
 
-      {/* 장바구니 담기 버튼 */}
-      <button
-        onClick={() => addToCart(product)}
-        className="mt-2 px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 w-full text-sm"
-      >
-        장바구니 담기
-      </button>
-    </div>
+      <AddToCartButton 
+        product={product}
+        onAddToCart={handleAddToCart}
+      />
+    </article>
   );
 }
 
