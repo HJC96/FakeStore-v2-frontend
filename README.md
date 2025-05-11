@@ -171,7 +171,7 @@ export interface Product {
 import axios from 'axios';
 
 export const api = axios.create({
-  baseURL: 'https://fakestoreapi.com',
+  baseURL: 'http://localhost:8080',
 });
 ~~~
 3) 상품 목록 가져오는 API 함수 작성
@@ -2426,5 +2426,1349 @@ function ProductCard({ product }: ProductCardProps) {
 }
 
 export default ProductCard;
+
+~~~
+
+4.14 로그인 기능 구현
+~~~tsx
+/types/auth.ts
+export interface User {
+  id: number;
+  email: string;
+  username: string;
+}
+
+export interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface AuthState {
+  user: User | null;
+  tokens: AuthTokens | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+} 
+
+/contexts/AuthContext.tsx
+import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import { AuthState, User, LoginCredentials, AuthTokens } from '../types/auth';
+
+interface AuthContextType extends AuthState {
+  login: (credentials: LoginCredentials) => Promise<void>;
+  logout: () => void;
+}
+
+const initialState: AuthState = {
+  user: null,
+  tokens: null,
+  isAuthenticated: false,
+  isLoading: false,
+  error: null,
+};
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+type AuthAction =
+  | { type: 'LOGIN_START' }
+  | { type: 'LOGIN_SUCCESS'; payload: AuthTokens }
+  | { type: 'LOGIN_FAILURE'; payload: string }
+  | { type: 'LOGOUT' };
+
+function authReducer(state: AuthState, action: AuthAction): AuthState {
+  switch (action.type) {
+    case 'LOGIN_START':
+      return { ...state, isLoading: true, error: null };
+    case 'LOGIN_SUCCESS':
+      return {
+        ...state,
+        isLoading: false,
+        isAuthenticated: true,
+        tokens: action.payload,
+        error: null,
+      };
+    case 'LOGIN_FAILURE':
+      return {
+        ...state,
+        isLoading: false,
+        isAuthenticated: false,
+        user: null,
+        tokens: null,
+        error: action.payload,
+      };
+    case 'LOGOUT':
+      return initialState;
+    default:
+      return state;
+  }
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [state, dispatch] = useReducer(authReducer, initialState);
+
+  const login = async (credentials: LoginCredentials) => {
+    try {
+      dispatch({ type: 'LOGIN_START' });
+      
+      const response = await fetch('http://localhost:8080/members/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || 'Login failed');
+      }
+
+      const data: AuthTokens = await response.json();
+      
+      // 토큰을 로컬 스토리지에 저장
+      localStorage.setItem('accessToken', data.accessToken);
+      localStorage.setItem('refreshToken', data.refreshToken);
+
+      dispatch({ type: 'LOGIN_SUCCESS', payload: data });
+    } catch (error) {
+      console.error('Login error:', error);
+      dispatch({
+        type: 'LOGIN_FAILURE',
+        payload: error instanceof Error ? error.message : 'An error occurred during login',
+      });
+    }
+  };
+
+  const logout = () => {
+    // 로컬 스토리지에서 토큰 제거
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    dispatch({ type: 'LOGOUT' });
+  };
+
+  return (
+    <AuthContext.Provider value={{ ...state, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+} 
+
+/pages/Login.tsx
+import React, { useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+
+export default function Login() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const { login, isLoading, error } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await login({ email, password });
+      navigate('/');
+    } catch (err) {
+      // Error is handled by the auth context
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            Sign in to your account
+          </h2>
+        </div>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="rounded-md shadow-sm -space-y-px">
+            <div>
+              <label htmlFor="email-address" className="sr-only">
+                Email address
+              </label>
+              <input
+                id="email-address"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Email address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="password" className="sr-only">
+                Password
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="text-red-500 text-sm text-center">{error}</div>
+          )}
+
+          <div>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              {isLoading ? 'Signing in...' : 'Sign in'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+} 
+
+App.tsx
+import React from 'react';
+import './App.css';
+import {BrowserRouter, Routes, Route, Navigate} from 'react-router-dom';
+import Home from './pages/Home';
+import ProductDetail from './pages/ProductDetail';
+import {CartProvider} from './contexts/CartContext';
+import {AuthProvider} from './contexts/AuthContext';
+import CartPage from './pages/CartPage';
+import Header from './components/Header';
+import AdminPage from './pages/AdminPage';
+import Login from './pages/Login';
+
+function App() {
+    return (
+        <AuthProvider>
+            <CartProvider>
+                <BrowserRouter>
+                    <Header />  {/* 여기 */}
+                    <Routes>
+                        <Route path="/products" element={<Home />}/>
+                        <Route path="/products/:id" element={<ProductDetail />}/>
+                        <Route path="/cart" element={<CartPage />}/>
+                        <Route path="/admin" element={<AdminPage />}/>
+                        <Route path="/login" element={<Login />}/>
+                        <Route path="/" element={<Navigate to="/products" />}/> {/* 루트로 들어오면 자동 이동 */}
+                    </Routes>
+                </BrowserRouter>
+            </CartProvider>
+        </AuthProvider>
+    );
+}
+
+export default App;
+~~~
+![](image%2012.png)
+
+# 5. 추가 개선
+ ## 5.1/login 페이지만 접속해도 아래와 같이 carts, product를 호출하고 있음.
+![](image%2014.png)
+-> CartContext.tsx에서 useEffect를 통해 컴포넌트가 마운트 될때마다 장바구니 데이터를 불러오고 있음. 그래서 로그인 페이지에서도 불필요하게 API를 호출하고 있었던 것
+~~~tsx
+
+  useEffect(() => {
+    const userId = 1; // 테스트용 고정 ID
+    initializeCartFromServer(userId);
+  }, []);
+
+~~~
+이 코드는 CartProvider가 마운트될 때마다 자동으로 실행됩니다. 즉, 웹사이트의 어떤 페이지를 방문하든 상관없이 장바구니 데이터를 불러오려고 시도
+* 실제로는 로그인한 사용자의 장바구니만 필요한데, 모든 페이지에서 API를 호출합니다
+
+
+~~~tsx
+import {
+  createContext,
+  useContext,
+  useState,
+  ReactNode,
+} from 'react';
+import { Product } from '../types/Product';
+import { fetchCartByUserId } from '../api/carts';
+import { fetchProductById } from '../api/products';
+
+export interface CartItem {
+  product: Product;
+  quantity: number;
+}
+
+interface CartContextType {
+  cart: CartItem[];
+  addToCart: (product: Product) => void;
+  increaseQuantity: (productId: number) => void;
+  decreaseQuantity: (productId: number) => void;
+  removeFromCart: (productId: number) => void;
+  loadCart: (userId: number) => Promise<void>;
+}
+
+const CartContext = createContext<CartContextType | undefined>(undefined);
+
+export function CartProvider({ children }: { children: ReactNode }) {
+  const [cart, setCart] = useState<CartItem[]>([]);
+
+  // ✅ 서버에서 장바구니 불러오기
+  const loadCart = async (userId: number) => {
+    try {
+      const res = await fetchCartByUserId(userId);
+      const cartData = res.data[0]; // 가장 최근 장바구니
+
+      if (!cartData) return;
+
+      const items: CartItem[] = await Promise.all(
+        cartData.products.map(async (item) => {
+          const productRes = await fetchProductById(item.productId);
+          return {
+            product: productRes.data,
+            quantity: item.quantity,
+          };
+        })
+      );
+
+      setCart(items);
+    } catch (err) {
+      console.error('🛑 장바구니 초기화 실패:', err);
+    }
+  };
+
+  const addToCart = (product: Product) => {
+    setCart((prev) => {
+      const found = prev.find((item) => item.product.id === product.id);
+      if (found) {
+        return prev.map((item) =>
+          item.product.id === product.id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+      }
+      return [...prev, { product, quantity: 1 }];
+    });
+  };
+
+  const increaseQuantity = (productId: number) => {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.product.id === productId
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      )
+    );
+  };
+
+  const decreaseQuantity = (productId: number) => {
+    setCart((prev) =>
+      prev
+        .map((item) =>
+          item.product.id === productId
+            ? { ...item, quantity: item.quantity - 1 }
+            : item
+        )
+        .filter((item) => item.quantity > 0)
+    );
+  };
+
+  const removeFromCart = (productId: number) => {
+    setCart((prev) => prev.filter((item) => item.product.id !== productId));
+  };
+
+  return (
+    <CartContext.Provider
+      value={{
+        cart,
+        addToCart,
+        increaseQuantity,
+        decreaseQuantity,
+        removeFromCart,
+        loadCart,
+      }}
+    >
+      {children}
+    </CartContext.Provider>
+  );
+}
+
+export function useCart() {
+  const context = useContext(CartContext);
+  if (!context) {
+    throw new Error('useCart must be used within a CartProvider');
+  }
+  return context;
+}
+
+import React, { useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { useCart } from '../contexts/CartContext';
+import { useNavigate } from 'react-router-dom';
+
+export default function Login() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const { login, isLoading, error } = useAuth();
+  const { loadCart } = useCart();
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await login({ email, password });
+      await loadCart(1); // TODO: 실제 사용자 ID로 변경 필요
+	  navigate('/products');
+    } catch (err) {
+      // Error is handled by the auth context
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            Sign in to your account
+          </h2>
+        </div>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="rounded-md shadow-sm -space-y-px">
+            <div>
+              <label htmlFor="email-address" className="sr-only">
+                Email address
+              </label>
+              <input
+                id="email-address"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Email address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="password" className="sr-only">
+                Password
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="text-red-500 text-sm text-center">{error}</div>
+          )}
+
+          <div>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              {isLoading ? 'Signing in...' : 'Sign in'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+} 
+
+~~~
+
+## 5.2 로그인시 기본 /products 페이지로 이동하도록 수정
+~~~tsx
+const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await login({ email, password });
+      await loadCart(1); // TODO: 실제 사용자 ID로 변경 필요
+      navigate('/products');
+    } catch (err) {
+      // Error is handled by the auth context
+    }
+  };
+
+~~~
+
+## 5.3 로그인하지 않은 사용자가 url 치고 접속하는 것 방지
+~~~tsx
+/components/ProtectedRoute.tsx
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+
+export function ProtectedRoute({ children }: ProtectedRouteProps) {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+} 
+
+/App.tsx
+import React from 'react';
+import './App.css';
+import {BrowserRouter, Routes, Route, Navigate} from 'react-router-dom';
+import Home from './pages/Home';
+import ProductDetail from './pages/ProductDetail';
+import {CartProvider} from './contexts/CartContext';
+import {AuthProvider} from './contexts/AuthContext';
+import CartPage from './pages/CartPage';
+import Header from './components/Header';
+import AdminPage from './pages/AdminPage';
+import Login from './pages/Login';
+import { ProtectedRoute } from './components/ProtectedRoute';
+
+function App() {
+    return (
+        <AuthProvider>
+            <CartProvider>
+                <BrowserRouter>
+                    <Header />
+                    <Routes>
+                        <Route path="/login" element={<Login />}/>
+                        <Route path="/" element={<Navigate to="/products" />}/>
+                        
+                        {/* 보호된 라우트들 */}
+                        <Route path="/products" element={
+                            <ProtectedRoute>
+                                <Home />
+                            </ProtectedRoute>
+                        }/>
+                        <Route path="/products/:id" element={
+                            <ProtectedRoute>
+                                <ProductDetail />
+                            </ProtectedRoute>
+                        }/>
+                        <Route path="/cart" element={
+                            <ProtectedRoute>
+                                <CartPage />
+                            </ProtectedRoute>
+                        }/>
+                        <Route path="/admin" element={
+                            <ProtectedRoute>
+                                <AdminPage />
+                            </ProtectedRoute>
+                        }/>
+                    </Routes>
+                </BrowserRouter>
+            </CartProvider>
+        </AuthProvider>
+    );
+}
+
+export default App;
+
+~~~
+
+## 5.4 API 호출 시 인증 토큰(access token)을 헤더에 포함
+~~~tsx
+// src/api/axios.ts
+import axios from 'axios';
+
+// 공용 API용 axios 인스턴스
+export const publicApi = axios.create({
+  baseURL: 'http://localhost:8080',
+});
+
+// 인증이 필요한 API용 axios 인스턴스
+export const authApi = axios.create({
+  baseURL: 'http://localhost:8080',
+});
+
+// 요청 인터셉터 추가
+authApi.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// src/api/products.ts
+import { authApi } from './axios';
+import { Product } from '../types/Product';
+
+// 옵션 기반 통합 상품 조회 함수
+export const fetchProducts = (options?: { category?: string; limit?: number }) => {
+  // fakestore에서는 limit은 category랑 같이 못 씀
+  if (options?.category && options?.limit) {
+    console.warn('category와 limit은 함께 사용 불가');
+  }
+
+  let url = '/products';
+
+  if (options?.category) {
+    url = `/products/category/${options.category}`;
+    return authApi.get<Product[]>(url); // 바로 반환
+  }
+
+  // limit만 적용되는 경우
+  if (options?.limit) {
+    url += `?limit=${options.limit}`;
+  }
+
+  return authApi.get<Product[]>(url);
+};
+
+export const fetchProductById = (id: number) => {
+  return authApi.get<Product>(`/products/${id}`);
+};
+
+// src/api/products.ts
+export const fetchCategories = () => {
+  return authApi.get<string[]>('/products/categories');
+};
+
+// export const fetchProductsByCategory = (category: string) => {
+//   return api.get<Product[]>(`/products/category/${category}`);
+// };
+
+// 상품 추가 요청 - POST /products
+export const createProduct = (newProduct: Omit<Product, 'id'>) => {
+  return authApi.post<Product>('/products', newProduct);
+};
+
+// src/api/products.ts
+
+// 상품 전체 수정 - PUT
+export const updateProduct = (id: number, updatedProduct: Omit<Product, 'id'>) => {
+  return authApi.put<Product>(`/products/${id}`, updatedProduct);
+};
+
+// 상품 삭제 요청
+export const deleteProduct = (id: number) => {
+  return authApi.delete(`/products/${id}`);
+};
+
+// 상품 부분 수정 - PATCH
+export const patchProduct = (id: number, partialData: Partial<Omit<Product, 'id'>>) => {
+  return authApi.patch<Product>(`/products/${id}`, partialData);
+};
+
+// src/api/carts.ts
+import { authApi } from './axios';
+
+export interface RawCartItem {
+  productId: number;
+  quantity: number;
+}
+
+export interface RawCart {
+  id: number;
+  userId: number;
+  date: string;
+  products: RawCartItem[];
+}
+
+export const fetchCartByUserId = (userId: number) => {
+  return authApi.get<RawCart[]>(`/carts?userId=${userId}`);
+};
+
+~~~
+
+## 5.5 페이지 반영
+~~~tsx
+// src/types/Product.ts
+export interface Rating {
+  rate: number;
+  count: number;
+}
+
+export interface Product {
+  id: number;
+  title: string;
+  price: number;
+  description: string;
+  category: string;
+  image: string;
+  rating: Rating;
+}
+
+export interface PaginatedResponse<T> {
+  dtoList: T[];
+  total: number;
+  page: number;
+  size: number;
+  start: number;
+  end: number;
+  prev: boolean;
+  next: boolean;
+}
+
+// src/api/products.ts
+import { authApi } from './axios';
+import { Product, PaginatedResponse } from '../types/Product';
+
+// 옵션 기반 통합 상품 조회 함수
+export const fetchProducts = (options?: { 
+  category?: string; 
+  page?: number;
+  size?: number;
+}) => {
+  let url = '/products';
+
+  if (options?.category) {
+    url = `/products/category/${options.category}`;
+  }
+
+  // 페이지네이션 파라미터 추가
+  const params = new URLSearchParams();
+  if (options?.page) params.append('page', options.page.toString());
+  if (options?.size) params.append('size', options.size.toString());
+
+  return authApi.get<PaginatedResponse<Product>>(url, { params });
+};
+
+export const fetchProductById = (id: number) => {
+  return authApi.get<Product>(`/products/${id}`);
+};
+
+// src/api/products.ts
+export const fetchCategories = () => {
+  return authApi.get<string[]>('/products/categories');
+};
+
+// export const fetchProductsByCategory = (category: string) => {
+//   return api.get<Product[]>(`/products/category/${category}`);
+// };
+
+// 상품 추가 요청 - POST /products
+export const createProduct = (newProduct: Omit<Product, 'id'>) => {
+  return authApi.post<Product>('/products', newProduct);
+};
+
+// src/api/products.ts
+
+// 상품 전체 수정 - PUT
+export const updateProduct = (id: number, updatedProduct: Omit<Product, 'id'>) => {
+  return authApi.put<Product>(`/products/${id}`, updatedProduct);
+};
+
+// 상품 삭제 요청
+export const deleteProduct = (id: number) => {
+  return authApi.delete(`/products/${id}`);
+};
+
+// 상품 부분 수정 - PATCH
+export const patchProduct = (id: number, partialData: Partial<Omit<Product, 'id'>>) => {
+  return authApi.patch<Product>(`/products/${id}`, partialData);
+};
+
+
+// src/pages/Home.tsx
+import { useEffect, useState } from 'react';
+import { fetchProducts } from '../api/products';
+import { Product } from '../types/Product';
+import ProductCard from '../components/ProductCard';
+
+const ITEMS_PER_PAGE = 10;
+
+function Home() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  useEffect(() => {
+    fetchProducts({ page: currentPage, size: ITEMS_PER_PAGE })
+      .then((res) => {
+        setProducts(res.data.dtoList);
+        setTotalPages(Math.ceil(res.data.total / ITEMS_PER_PAGE));
+      })
+      .catch((err) => console.error(err));
+  }, [currentPage]);
+
+  return (
+    <div className="p-4">
+      <h1 className="text-xl font-bold mb-4">🛒 상품 목록</h1>
+
+      {/* 상품 그리드 */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        {products.map((product) => (
+          <ProductCard key={product.id} product={product} />
+        ))}
+      </div>
+
+      {/* 페이지네이션 버튼 */}
+      <div className="flex justify-center gap-2">
+        {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((page) => (
+          <button
+            key={page}
+            onClick={() => setCurrentPage(page)}
+            className={`px-3 py-1 rounded ${
+              page === currentPage
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-200 hover:bg-gray-300'
+            }`}
+          >
+            {page}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default Home;
+
+
+// src/pages/AdminPage.tsx
+
+import { useEffect, useState } from 'react';
+import {
+  createProduct,
+  fetchProducts,
+  updateProduct,
+  deleteProduct,
+  patchProduct,
+} from '../api/products';
+import { Product } from '../types/Product';
+
+function AdminPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [priceEditId, setPriceEditId] = useState<number | null>(null);
+  const [newPrice, setNewPrice] = useState('');
+
+  // 폼 상태
+  const [title, setTitle] = useState('');
+  const [price, setPrice] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('');
+  const [image, setImage] = useState('');
+
+  // 상품 목록 불러오기
+  useEffect(() => {
+    fetchProducts()
+      .then((res) => setProducts(res.data.dtoList))
+      .catch((err) => console.error(err));
+  }, []);
+
+  // 폼 초기화
+  const resetForm = () => {
+    setTitle('');
+    setPrice('');
+    setDescription('');
+    setCategory('');
+    setImage('');
+    setEditingId(null);
+  };
+
+  // 상품 등록/수정
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const productData = {
+      title,
+      price: Number(price),
+      description,
+      category,
+      image,
+      rating: {
+        rate: 0,
+        count: 0
+      }
+    };
+
+    try {
+      if (editingId === null) {
+        // 등록
+        await createProduct(productData);
+        alert('✅ 등록 완료');
+      } else {
+        // 수정
+        await updateProduct(editingId, productData);
+        alert('✏️ 수정 완료');
+      }
+
+      // 목록 새로고침
+      const updated = await fetchProducts();
+      setProducts(updated.data.dtoList);
+      resetForm();
+    } catch (err) {
+      console.error(err);
+      alert('❌ 실패');
+    }
+  };
+
+  // 상품 삭제
+  const handleDelete = async (id: number) => {
+    if (!confirm('정말 삭제하시겠습니까?')) return;
+
+    try {
+      await deleteProduct(id);
+      const updated = await fetchProducts();
+      setProducts(updated.data.dtoList);
+      alert('🗑️ 삭제 완료');
+    } catch (err) {
+      console.error(err);
+      alert('❌ 삭제 실패');
+    }
+  };
+
+  // 가격 수정
+  const handlePriceEdit = async (id: number) => {
+    if (!newPrice) return;
+
+    try {
+      const res = await patchProduct(id, { price: Number(newPrice) });
+      alert(`💰 가격 변경 완료: $${res.data.price}`);
+      const updated = await fetchProducts();
+      setProducts(updated.data.dtoList);
+      setPriceEditId(null);
+      setNewPrice('');
+    } catch (err) {
+      console.error(err);
+      alert('❌ 가격 변경 실패');
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      <h1 className="text-2xl font-bold mb-4">
+        {editingId === null ? '📦 상품 등록' : '✏️ 상품 수정'}
+      </h1>
+
+      <form onSubmit={handleSubmit} className="space-y-4 mb-8">
+        <input
+          type="text"
+          placeholder="상품명"
+          className="w-full border p-2"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+        />
+        <input
+          type="number"
+          placeholder="가격"
+          className="w-full border p-2"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          required
+        />
+        <input
+          type="text"
+          placeholder="카테고리"
+          className="w-full border p-2"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          required
+        />
+        <input
+          type="text"
+          placeholder="이미지 URL"
+          className="w-full border p-2"
+          value={image}
+          onChange={(e) => setImage(e.target.value)}
+          required
+        />
+        <textarea
+          placeholder="상품 설명"
+          className="w-full border p-2 h-24"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          required
+        />
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            {editingId === null ? '등록하기' : '수정 완료'}
+          </button>
+          {editingId !== null && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+            >
+              취소
+            </button>
+          )}
+        </div>
+      </form>
+
+      <h2 className="text-xl font-bold mb-2">📋 상품 목록</h2>
+      <div className="space-y-4">
+        {products.map((product) => (
+          <div
+            key={product.id}
+            className="border p-4 rounded flex justify-between items-center"
+          >
+            <div>
+              <h3 className="font-bold">{product.title}</h3>
+              <p className="text-gray-600">${product.price}</p>
+            </div>
+            <div className="flex gap-2">
+              {priceEditId === product.id ? (
+                <>
+                  <input
+                    type="number"
+                    value={newPrice}
+                    onChange={(e) => setNewPrice(e.target.value)}
+                    className="border p-1 w-24"
+                    placeholder="새 가격"
+                  />
+                  <button
+                    onClick={() => handlePriceEdit(product.id)}
+                    className="px-3 py-1 bg-green-500 text-white rounded"
+                  >
+                    확인
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPriceEditId(null);
+                      setNewPrice('');
+                    }}
+                    className="px-3 py-1 bg-gray-300 rounded"
+                  >
+                    취소
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setPriceEditId(product.id)}
+                    className="px-3 py-1 bg-yellow-500 text-white rounded"
+                  >
+                    가격 수정
+                  </button>
+                  <button
+                    onClick={() => handleDelete(product.id)}
+                    className="px-3 py-1 bg-red-500 text-white rounded"
+                  >
+                    삭제
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default AdminPage;
+
+
+// src/components/LimitedProducts.tsx
+import { useEffect, useState } from 'react';
+import { fetchProducts } from '../api/products';
+import { Product } from '../types/Product';
+import ProductCard from './ProductCard';
+
+interface Props {
+  limit: number;
+}
+
+export default function LimitedProducts({ limit }: Props) {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchProducts({ limit })
+      .then((res) => setProducts(res.data.dtoList))
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
+  }, [limit]);
+
+  if (loading) return <div>Loading...</div>;
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      {products.map((product) => (
+        <ProductCard key={product.id} product={product} />
+      ))}
+    </div>
+  );
+}
+
+
+// src/pages/AdminPage.tsx
+
+import { useEffect, useState } from 'react';
+import {
+  createProduct,
+  fetchProducts,
+  updateProduct,
+  deleteProduct,
+  patchProduct,
+} from '../api/products';
+import { Product } from '../types/Product';
+
+function AdminPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [priceEditId, setPriceEditId] = useState<number | null>(null);
+  const [newPrice, setNewPrice] = useState('');
+
+  // 폼 상태
+  const [title, setTitle] = useState('');
+  const [price, setPrice] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('');
+  const [image, setImage] = useState('');
+
+  // 상품 목록 불러오기
+  useEffect(() => {
+    fetchProducts()
+      .then((res) => setProducts(res.data.dtoList))
+      .catch((err) => console.error(err));
+  }, []);
+
+  // 폼 초기화
+  const resetForm = () => {
+    setTitle('');
+    setPrice('');
+    setDescription('');
+    setCategory('');
+    setImage('');
+    setEditingId(null);
+  };
+
+  // 상품 등록/수정
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const productData = {
+      title,
+      price: Number(price),
+      description,
+      category,
+      image,
+      rating: {
+        rate: 0,
+        count: 0
+      }
+    };
+
+    try {
+      if (editingId === null) {
+        // 등록
+        await createProduct(productData);
+        alert('✅ 등록 완료');
+      } else {
+        // 수정
+        await updateProduct(editingId, productData);
+        alert('✏️ 수정 완료');
+      }
+
+      // 목록 새로고침
+      const updated = await fetchProducts();
+      setProducts(updated.data.dtoList);
+      resetForm();
+    } catch (err) {
+      console.error(err);
+      alert('❌ 실패');
+    }
+  };
+
+  // 상품 삭제
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('정말 삭제하시겠습니까?')) return;
+
+    try {
+      await deleteProduct(id);
+      const updated = await fetchProducts();
+      setProducts(updated.data.dtoList);
+      alert('🗑️ 삭제 완료');
+    } catch (err) {
+      console.error(err);
+      alert('❌ 삭제 실패');
+    }
+  };
+
+  // 가격 수정
+  const handlePriceEdit = async (id: number) => {
+    if (!newPrice) return;
+
+    try {
+      const res = await patchProduct(id, { price: Number(newPrice) });
+      alert(`💰 가격 변경 완료: $${res.data.price}`);
+      const updated = await fetchProducts();
+      setProducts(updated.data.dtoList);
+      setPriceEditId(null);
+      setNewPrice('');
+    } catch (err) {
+      console.error(err);
+      alert('❌ 가격 변경 실패');
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      <h1 className="text-2xl font-bold mb-4">
+        {editingId === null ? '📦 상품 등록' : '✏️ 상품 수정'}
+      </h1>
+
+      <form onSubmit={handleSubmit} className="space-y-4 mb-8">
+        <input
+          type="text"
+          placeholder="상품명"
+          className="w-full border p-2"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+        />
+        <input
+          type="number"
+          placeholder="가격"
+          className="w-full border p-2"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          required
+        />
+        <input
+          type="text"
+          placeholder="카테고리"
+          className="w-full border p-2"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          required
+        />
+        <input
+          type="text"
+          placeholder="이미지 URL"
+          className="w-full border p-2"
+          value={image}
+          onChange={(e) => setImage(e.target.value)}
+          required
+        />
+        <textarea
+          placeholder="상품 설명"
+          className="w-full border p-2 h-24"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          required
+        />
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            {editingId === null ? '등록하기' : '수정 완료'}
+          </button>
+          {editingId !== null && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+            >
+              취소
+            </button>
+          )}
+        </div>
+      </form>
+
+      <h2 className="text-xl font-bold mb-2">📋 상품 목록</h2>
+      <div className="space-y-4">
+        {products.map((product) => (
+          <div
+            key={product.id}
+            className="border p-4 rounded flex justify-between items-center"
+          >
+            <div>
+              <h3 className="font-bold">{product.title}</h3>
+              <p className="text-gray-600">${product.price}</p>
+            </div>
+            <div className="flex gap-2">
+              {priceEditId === product.id ? (
+                <>
+                  <input
+                    type="number"
+                    value={newPrice}
+                    onChange={(e) => setNewPrice(e.target.value)}
+                    className="border p-1 w-24"
+                    placeholder="새 가격"
+                  />
+                  <button
+                    onClick={() => handlePriceEdit(product.id)}
+                    className="px-3 py-1 bg-green-500 text-white rounded"
+                  >
+                    확인
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPriceEditId(null);
+                      setNewPrice('');
+                    }}
+                    className="px-3 py-1 bg-gray-300 rounded"
+                  >
+                    취소
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setPriceEditId(product.id)}
+                    className="px-3 py-1 bg-yellow-500 text-white rounded"
+                  >
+                    가격 수정
+                  </button>
+                  <button
+                    onClick={() => handleDelete(product.id)}
+                    className="px-3 py-1 bg-red-500 text-white rounded"
+                  >
+                    삭제
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default AdminPage;
 
 ~~~

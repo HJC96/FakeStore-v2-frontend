@@ -1,5 +1,5 @@
 // src/api/carts.ts
-import { api } from './axios';
+import { authApi } from './axios';
 
 export interface RawCartItem {
   productId: number;
@@ -14,5 +14,5 @@ export interface RawCart {
 }
 
 export const fetchCartByUserId = (userId: number) => {
-  return api.get<RawCart[]>(`/carts?userId=${userId}`);
+  return authApi.get<RawCart[]>(`/carts?userId=${userId}`);
 };

@@ -2,7 +2,6 @@ import {
   createContext,
   useContext,
   useState,
-  useEffect,
   ReactNode,
 } from 'react';
 import { Product } from '../types/Product';
@@ -20,6 +19,7 @@ interface CartContextType {
   increaseQuantity: (productId: number) => void;
   decreaseQuantity: (productId: number) => void;
   removeFromCart: (productId: number) => void;
+  loadCart: (userId: number) => Promise<void>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -28,7 +28,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
 
   // ✅ 서버에서 장바구니 불러오기
-  const initializeCartFromServer = async (userId: number) => {
+  const loadCart = async (userId: number) => {
     try {
       const res = await fetchCartByUserId(userId);
       const cartData = res.data[0]; // 가장 최근 장바구니
@@ -50,11 +50,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
       console.error('🛑 장바구니 초기화 실패:', err);
     }
   };
-
-  useEffect(() => {
-    const userId = 1; // 테스트용 고정 ID
-    initializeCartFromServer(userId);
-  }, []);
 
   const addToCart = (product: Product) => {
     setCart((prev) => {
@@ -104,6 +99,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         increaseQuantity,
         decreaseQuantity,
         removeFromCart,
+        loadCart,
       }}
     >
       {children}

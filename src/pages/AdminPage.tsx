@@ -12,97 +12,101 @@ import { Product } from '../types/Product';
 
 function AdminPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [priceEditId, setPriceEditId] = useState<number | null>(null);
+  const [newPrice, setNewPrice] = useState('');
+
+  // 폼 상태
   const [title, setTitle] = useState('');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
   const [image, setImage] = useState('');
-  const [editingId, setEditingId] = useState<number | null>(null);
 
-  // PATCH: 가격 수정용 상태
-  const [priceEditId, setPriceEditId] = useState<number | null>(null);
-  const [newPrice, setNewPrice] = useState('');
-
+  // 상품 목록 불러오기
   useEffect(() => {
     fetchProducts()
-      .then((res) => setProducts(res.data))
+      .then((res) => setProducts(res.data.dtoList))
       .catch((err) => console.error(err));
   }, []);
 
+  // 폼 초기화
+  const resetForm = () => {
+    setTitle('');
+    setPrice('');
+    setDescription('');
+    setCategory('');
+    setImage('');
+    setEditingId(null);
+  };
+
+  // 상품 등록/수정
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const productData = {
       title,
-      price: parseFloat(price),
+      price: Number(price),
       description,
       category,
       image,
+      rating: {
+        rate: 0,
+        count: 0
+      }
     };
 
     try {
       if (editingId === null) {
-        const res = await createProduct(productData);
-        alert(`✅ 상품 등록 완료: ${res.data.title}`);
+        // 등록
+        await createProduct(productData);
+        alert('✅ 등록 완료');
       } else {
-        const res = await updateProduct(editingId, productData);
-        alert(`✏️ 상품 수정 완료: ${res.data.title}`);
+        // 수정
+        await updateProduct(editingId, productData);
+        alert('✏️ 수정 완료');
       }
 
+      // 목록 새로고침
       const updated = await fetchProducts();
-      setProducts(updated.data);
+      setProducts(updated.data.dtoList);
       resetForm();
     } catch (err) {
       console.error(err);
-      alert('오류가 발생했습니다.');
+      alert('❌ 실패');
     }
   };
 
-  const handleEdit = (product: Product) => {
-    setEditingId(product.id);
-    setTitle(product.title);
-    setPrice(String(product.price));
-    setDescription(product.description);
-    setCategory(product.category);
-    setImage(product.image);
-  };
-
+  // 상품 삭제
   const handleDelete = async (id: number) => {
     if (!window.confirm('정말 삭제하시겠습니까?')) return;
 
     try {
       await deleteProduct(id);
       const updated = await fetchProducts();
-      setProducts(updated.data);
+      setProducts(updated.data.dtoList);
       alert('🗑️ 삭제 완료');
     } catch (err) {
       console.error(err);
-      alert('삭제 중 오류가 발생했습니다.');
+      alert('❌ 삭제 실패');
     }
   };
 
-  // PATCH: 가격만 수정
-  const handlePriceChange = async (id: number, newPrice: string) => {
+  // 가격 수정
+  const handlePriceEdit = async (id: number) => {
+    if (!newPrice) return;
+
     try {
-      const res = await patchProduct(id, { price: parseFloat(newPrice) });
+      const res = await patchProduct(id, { price: Number(newPrice) });
       alert(`💰 가격 변경 완료: $${res.data.price}`);
       const updated = await fetchProducts();
-      setProducts(updated.data);
+      setProducts(updated.data.dtoList);
       setPriceEditId(null);
       setNewPrice('');
     } catch (err) {
       console.error(err);
-      alert('가격 변경 실패');
+      alert('❌ 가격 변경 실패');
     }
-  };
-
-  const resetForm = () => {
-    setEditingId(null);
-    setTitle('');
-    setPrice('');
-    setDescription('');
-    setCategory('');
-    setImage('');
   };
 
   return (
@@ -171,73 +175,62 @@ function AdminPage() {
       </form>
 
       <h2 className="text-xl font-bold mb-2">📋 상품 목록</h2>
-      <ul className="space-y-2">
+      <div className="space-y-4">
         {products.map((product) => (
-          <li
+          <div
             key={product.id}
             className="border p-4 rounded flex justify-between items-center"
           >
             <div>
-              <p className="font-semibold">{product.title}</p>
-              <p className="text-sm text-gray-600">${product.price}</p>
+              <h3 className="font-bold">{product.title}</h3>
+              <p className="text-gray-600">${product.price}</p>
             </div>
-            <div className="flex gap-2 items-center">
-              <button
-                onClick={() => handleEdit(product)}
-                className="px-3 py-1 text-sm bg-yellow-400 text-white rounded hover:bg-yellow-500"
-              >
-                수정
-              </button>
-              <button
-                onClick={() => handleDelete(product.id)}
-                className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600"
-              >
-                삭제
-              </button>
-              <button
-                onClick={() => {
-                  setPriceEditId(product.id);
-                  setNewPrice(String(product.price));
-                }}
-                className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
-              >
-                💰 가격 수정
-              </button>
+            <div className="flex gap-2">
+              {priceEditId === product.id ? (
+                <>
+                  <input
+                    type="number"
+                    value={newPrice}
+                    onChange={(e) => setNewPrice(e.target.value)}
+                    className="border p-1 w-24"
+                    placeholder="새 가격"
+                  />
+                  <button
+                    onClick={() => handlePriceEdit(product.id)}
+                    className="px-3 py-1 bg-green-500 text-white rounded"
+                  >
+                    확인
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPriceEditId(null);
+                      setNewPrice('');
+                    }}
+                    className="px-3 py-1 bg-gray-300 rounded"
+                  >
+                    취소
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setPriceEditId(product.id)}
+                    className="px-3 py-1 bg-yellow-500 text-white rounded"
+                  >
+                    가격 수정
+                  </button>
+                  <button
+                    onClick={() => handleDelete(product.id)}
+                    className="px-3 py-1 bg-red-500 text-white rounded"
+                  >
+                    삭제
+                  </button>
+                </>
+              )}
             </div>
-          </li>
-        ))}
-      </ul>
-
-      {/* 가격 수정 입력 UI */}
-      {priceEditId !== null && (
-        <div className="mt-6 border-t pt-4">
-          <h3 className="text-lg font-semibold mb-2">💸 가격 수정</h3>
-          <div className="flex gap-2 items-center">
-            <input
-              type="number"
-              placeholder="새 가격"
-              className="border p-2"
-              value={newPrice}
-              onChange={(e) => setNewPrice(e.target.value)}
-            />
-            <button
-              onClick={() => handlePriceChange(priceEditId, newPrice)}
-              className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-              변경
-            </button>
-            <button
-              onClick={() => {
-                setPriceEditId(null);
-                setNewPrice('');
-              }}
-              className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400"
-            >
-              취소
-            </button>
           </div>
-        </div>
-      )}
+        ))}
+      </div>
     </div>
   );
 }

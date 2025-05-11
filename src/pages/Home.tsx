@@ -4,25 +4,21 @@ import { fetchProducts } from '../api/products';
 import { Product } from '../types/Product';
 import ProductCard from '../components/ProductCard';
 
-const ITEMS_PER_PAGE = 6;
+const ITEMS_PER_PAGE = 10;
 
 function Home() {
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-
-  // 페이지에 해당하는 상품만 잘라서 보여주기
-  const paginatedProducts = allProducts.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
-    fetchProducts()
-      .then((res) => setAllProducts(res.data))
+    fetchProducts({ page: currentPage, size: ITEMS_PER_PAGE })
+      .then((res) => {
+        setProducts(res.data.dtoList);
+        setTotalPages(Math.ceil(res.data.total / ITEMS_PER_PAGE));
+      })
       .catch((err) => console.error(err));
-  }, []);
-
-  const totalPages = Math.ceil(allProducts.length / ITEMS_PER_PAGE);
+  }, [currentPage]);
 
   return (
     <div className="p-4">
@@ -30,7 +26,7 @@ function Home() {
 
       {/* 상품 그리드 */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-        {paginatedProducts.map((product) => (
+        {products.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}
       </div>

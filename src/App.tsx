@@ -4,24 +4,48 @@ import {BrowserRouter, Routes, Route, Navigate} from 'react-router-dom';
 import Home from './pages/Home';
 import ProductDetail from './pages/ProductDetail';
 import {CartProvider} from './contexts/CartContext';
+import {AuthProvider} from './contexts/AuthContext';
 import CartPage from './pages/CartPage';
 import Header from './components/Header';
 import AdminPage from './pages/AdminPage';
+import Login from './pages/Login';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 function App() {
     return (
-        <CartProvider>
-            <BrowserRouter>
-                <Header />  {/* 여기 */}
-                <Routes>
-                    <Route path="/products" element={<Home />}/>
-                    <Route path="/products/:id" element={<ProductDetail />}/>
-                    <Route path="/cart" element={<CartPage />}/>
-                    <Route path="/admin" element={<AdminPage />}/>
-                    <Route path="/" element={<Navigate to = "/products" />}/> {/* 루트로 들어오면 자동 이동 */}
-                </Routes>
-            </BrowserRouter>
-        </CartProvider>
+        <AuthProvider>
+            <CartProvider>
+                <BrowserRouter>
+                    <Header />
+                    <Routes>
+                        <Route path="/login" element={<Login />}/>
+                        <Route path="/" element={<Navigate to="/products" />}/>
+                        
+                        {/* 보호된 라우트들 */}
+                        <Route path="/products" element={
+                            <ProtectedRoute>
+                                <Home />
+                            </ProtectedRoute>
+                        }/>
+                        <Route path="/products/:id" element={
+                            <ProtectedRoute>
+                                <ProductDetail />
+                            </ProtectedRoute>
+                        }/>
+                        <Route path="/cart" element={
+                            <ProtectedRoute>
+                                <CartPage />
+                            </ProtectedRoute>
+                        }/>
+                        <Route path="/admin" element={
+                            <ProtectedRoute>
+                                <AdminPage />
+                            </ProtectedRoute>
+                        }/>
+                    </Routes>
+                </BrowserRouter>
+            </CartProvider>
+        </AuthProvider>
     );
 }
 
